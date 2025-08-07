@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[link(name = "cuda_kernels", kind = "static")]
 extern "C" {
-    fn calculate_distances(xs: *const i32, ys: *const i32, distances: *mut f32, n: i32);
+    fn calculate_distances(xs: *const i32, ys: *const i32, distances: *mut f32, n: i32, start_x: i32, start_y: i32);
 }
 
 #[derive(Debug)]
@@ -17,12 +17,15 @@ struct Point {
 #[derive(Parser, Debug)]
 #[command(name = "cord-path", version, about = "Coordinate Path Planner")]
 struct Args {
+    /// Path to CSV file with point coordinates
     #[arg(short, long)]
     file: PathBuf,
 
+    /// Optional starting X coordinate
     #[arg(short = 'x')]
     start_x: Option<i32>,
 
+    /// Optional starting Y coordinate
     #[arg(short = 'y')]
     start_y: Option<i32>,
 }
@@ -54,7 +57,7 @@ fn load_points_from_csv(path: &PathBuf) -> std::io::Result<Vec<Point>> {
     Ok(points)
 }
 
-fn call_cuda_distance(points: &[Point]) {
+fn call_cuda_distance(points: &[Point], start_x: i32, start_y: i32) {
     let n = points.len();
     let xs: Vec<i32> = points.iter().map(|p| p.x).collect();
     let ys: Vec<i32> = points.iter().map(|p| p.y).collect();
@@ -67,12 +70,14 @@ fn call_cuda_distance(points: &[Point]) {
             ys.as_ptr(),
             distances.as_mut_ptr(),
             n as i32,
+            start_x,
+            start_y,
         );
     }
 
-    println!("Distances from first point:");
+    println!("Distances from start ({}, {}):", start_x, start_y);
     for (i, d) in distances.iter().enumerate() {
-        println!("  to point {:>3}: {:.2}", i, d);
+        println!("  to point {:>3}: {:.4}", i, d);
     }
 }
 
@@ -82,15 +87,15 @@ fn main() {
     println!("Reading file: {:?}", args.file);
     let points = load_points_from_csv(&args.file).expect("Failed to load points");
 
-    if points.len() > 1 {
-        call_cuda_distance(&points);
+    if points.len() < 1 {
+        eprintln!("No valid points found.");
+        return;
     }
 
-    if let Some(x) = args.start_x {
-        if let Some(y) = args.start_y {
-            println!("Start position: ({}, {})", x, y);
-        } else {
-            eprintln!("Start Y missing when X is provided.");
-        }
-    }
+    let (start_x, start_y) = match (args.start_x, args.start_y) {
+        (Some(x), Some(y)) => (x, y),
+        _ => (points[0].x, points[0].y), // default to first point
+    };
+
+    call_cuda_distance(&points, start_x, start_y);
 }
