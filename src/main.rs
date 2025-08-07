@@ -3,6 +3,11 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+#[link(name = "cuda_kernels", kind = "static")]
+extern "C" {
+    fn calculate_distances(xs: *const i32, ys: *const i32, distances: *mut f32, n: i32);
+}
+
 #[derive(Debug)]
 struct Point {
     x: i32,
@@ -49,6 +54,27 @@ fn load_points_from_csv(path: &PathBuf) -> std::io::Result<Vec<Point>> {
     Ok(points)
 }
 
+fn call_cuda_distance(points: &[Point]) {
+    let n = points.len();
+    let xs: Vec<i32> = points.iter().map(|p| p.x).collect();
+    let ys: Vec<i32> = points.iter().map(|p| p.y).collect();
+
+    let mut distances = vec![0.0f32; n];
+
+    unsafe {
+        calculate_distances(
+            xs.as_ptr(),
+            ys.as_ptr(),
+            distances.as_mut_ptr(),
+            n as i32,
+        );
+    }
+
+    println!("Distances from first point:");
+    for (i, d) in distances.iter().enumerate() {
+        println!("  to point {:>3}: {:.2}", i, d);
+    }
+}
 
 fn main() {
     let args = Args::parse();
@@ -56,16 +82,15 @@ fn main() {
     println!("Reading file: {:?}", args.file);
     let points = load_points_from_csv(&args.file).expect("Failed to load points");
 
+    if points.len() > 1 {
+        call_cuda_distance(&points);
+    }
+
     if let Some(x) = args.start_x {
         if let Some(y) = args.start_y {
             println!("Start position: ({}, {})", x, y);
         } else {
             eprintln!("Start Y missing when X is provided.");
         }
-    }
-
-    println!("Loaded {} points:", points.len());
-    for (i, p) in points.iter().enumerate() {
-        println!("{:>3}. ({}, {})", i + 1, p.x, p.y);
     }
 }
