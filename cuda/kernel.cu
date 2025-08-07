@@ -10,39 +10,43 @@ void check(cudaError_t err, const char* func, const char* file, int line) {
     }
 }
 
-__global__ void calculate_distances_kernel(const int* xs, const int* ys, float* distances, int n, int start_x, int start_y) {
-    int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= n) return;
+// Kernel computes dist(i,j) = sqrt((x_i - x_j)^2 + (y_i - y_j)^2)
+__global__ void compute_distance_matrix_kernel(const int* xs, const int* ys, float* dist_matrix, int n) {
+    int i = blockIdx.y * blockDim.y + threadIdx.y; // row
+    int j = blockIdx.x * blockDim.x + threadIdx.x; // col
 
-    int dx = xs[i] - start_x;
-    int dy = ys[i] - start_y;
-    distances[i] = sqrtf((float)(dx * dx + dy * dy));
+    if (i < n && j < n) {
+        int dx = xs[i] - xs[j];
+        int dy = ys[i] - ys[j];
+        dist_matrix[i * n + j] = sqrtf(float(dx * dx + dy * dy));
+    }
 }
 
-extern "C" void calculate_distances(const int* h_xs, const int* h_ys, float* h_distances, int n, int start_x, int start_y) {
+extern "C" void compute_distance_matrix(const int* h_xs, const int* h_ys, float* h_dist_matrix, int n) {
     int* d_xs = nullptr;
     int* d_ys = nullptr;
-    float* d_distances = nullptr;
+    float* d_dist_matrix = nullptr;
 
     size_t int_size = n * sizeof(int);
-    size_t float_size = n * sizeof(float);
+    size_t matrix_size = n * n * sizeof(float);
 
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_xs, int_size));
     CHECK_CUDA_ERROR(cudaMalloc((void**)&d_ys, int_size));
-    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_distances, float_size));
+    CHECK_CUDA_ERROR(cudaMalloc((void**)&d_dist_matrix, matrix_size));
 
     CHECK_CUDA_ERROR(cudaMemcpy(d_xs, h_xs, int_size, cudaMemcpyHostToDevice));
     CHECK_CUDA_ERROR(cudaMemcpy(d_ys, h_ys, int_size, cudaMemcpyHostToDevice));
 
-    int threadsPerBlock = 256;
-    int blocks = (n + threadsPerBlock - 1) / threadsPerBlock;
+    dim3 threadsPerBlock(16, 16);
+    dim3 blocks((n + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                (n + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
-    calculate_distances_kernel<<<blocks, threadsPerBlock>>>(d_xs, d_ys, d_distances, n, start_x, start_y);
+    compute_distance_matrix_kernel<<<blocks, threadsPerBlock>>>(d_xs, d_ys, d_dist_matrix, n);
     CHECK_CUDA_ERROR(cudaDeviceSynchronize());
 
-    CHECK_CUDA_ERROR(cudaMemcpy(h_distances, d_distances, float_size, cudaMemcpyDeviceToHost));
+    CHECK_CUDA_ERROR(cudaMemcpy(h_dist_matrix, d_dist_matrix, matrix_size, cudaMemcpyDeviceToHost));
 
     cudaFree(d_xs);
     cudaFree(d_ys);
-    cudaFree(d_distances);
+    cudaFree(d_dist_matrix);
 }

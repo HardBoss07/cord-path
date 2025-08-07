@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 #[link(name = "cuda_kernels", kind = "static")]
 extern "C" {
-    fn calculate_distances(xs: *const i32, ys: *const i32, distances: *mut f32, n: i32, start_x: i32, start_y: i32);
+    fn compute_distance_matrix(xs: *const i32, ys: *const i32, dist_matrix: *mut f32, n: i32);
 }
 
 #[derive(Debug)]
@@ -57,45 +57,125 @@ fn load_points_from_csv(path: &PathBuf) -> std::io::Result<Vec<Point>> {
     Ok(points)
 }
 
-fn call_cuda_distance(points: &[Point], start_x: i32, start_y: i32) {
+fn call_cuda_distance_matrix(points: &[Point]) -> Vec<f32> {
     let n = points.len();
     let xs: Vec<i32> = points.iter().map(|p| p.x).collect();
     let ys: Vec<i32> = points.iter().map(|p| p.y).collect();
 
-    let mut distances = vec![0.0f32; n];
+    let mut dist_matrix = vec![0.0f32; n * n];
 
     unsafe {
-        calculate_distances(
+        compute_distance_matrix(
             xs.as_ptr(),
             ys.as_ptr(),
-            distances.as_mut_ptr(),
+            dist_matrix.as_mut_ptr(),
             n as i32,
-            start_x,
-            start_y,
         );
     }
 
-    println!("Distances from start ({}, {}):", start_x, start_y);
-    for (i, d) in distances.iter().enumerate() {
-        println!("  to point {:>3}: {:.4}", i, d);
+    dist_matrix
+}
+
+// Nearest Neighbor heuristic
+fn nearest_neighbor_tsp(dist_matrix: &[f32], n: usize, start: usize) -> Vec<usize> {
+    let mut visited = vec![false; n];
+    let mut path = Vec::with_capacity(n);
+    let mut current = start;
+
+    path.push(current);
+    visited[current] = true;
+
+    for _ in 1..n {
+        let mut next = None;
+        let mut min_dist = f32::MAX;
+
+        for candidate in 0..n {
+            if !visited[candidate] && dist_matrix[current * n + candidate] < min_dist {
+                min_dist = dist_matrix[current * n + candidate];
+                next = Some(candidate);
+            }
+        }
+
+        if let Some(next_node) = next {
+            path.push(next_node);
+            visited[next_node] = true;
+            current = next_node;
+        } else {
+            break;
+        }
     }
+
+    path
+}
+
+// 2-opt local optimization
+fn two_opt(dist_matrix: &[f32], n: usize, path: &mut Vec<usize>) {
+    let mut improved = true;
+
+    while improved {
+        improved = false;
+        for i in 1..(n - 1) {
+            for j in (i + 1)..n {
+                let a = path[i - 1];
+                let b = path[i];
+                let c = path[j - 1];
+                let d = path[j];
+
+                let old_dist = dist_matrix[a * n + b] + dist_matrix[c * n + d];
+                let new_dist = dist_matrix[a * n + c] + dist_matrix[b * n + d];
+
+                if new_dist < old_dist {
+                    path[i..j].reverse();
+                    improved = true;
+                }
+            }
+        }
+    }
+}
+
+// Calculate total path length
+fn path_length(dist_matrix: &[f32], path: &[usize]) -> f32 {
+    let n = path.len();
+    let mut sum = 0.0;
+    for i in 1..n {
+        sum += dist_matrix[path[i - 1] * n + path[i]];
+    }
+    sum
 }
 
 fn main() {
     let args = Args::parse();
 
-    println!("Reading file: {:?}", args.file);
-    let points = load_points_from_csv(&args.file).expect("Failed to load points");
+    let mut points = load_points_from_csv(&args.file).expect("Failed to load points");
+    let n_original = points.len();
 
-    if points.len() < 1 {
-        eprintln!("No valid points found.");
+    if n_original == 0 {
+        eprintln!("No points loaded.");
         return;
     }
 
-    let (start_x, start_y) = match (args.start_x, args.start_y) {
-        (Some(x), Some(y)) => (x, y),
-        _ => (points[0].x, points[0].y), // default to first point
-    };
+    // Insert start position if provided
+    if let (Some(sx), Some(sy)) = (args.start_x, args.start_y) {
+        points.insert(0, Point { x: sx, y: sy });
+    }
 
-    call_cuda_distance(&points, start_x, start_y);
+    let n = points.len();
+
+    let dist_matrix = call_cuda_distance_matrix(&points);
+
+    let start_index = 0; // start position at index 0 if inserted
+
+    let mut path = nearest_neighbor_tsp(&dist_matrix, n, start_index);
+
+    println!("Path length before 2-opt: {}", path_length(&dist_matrix, &path));
+
+    two_opt(&dist_matrix, n, &mut path);
+
+    println!("Path length after 2-opt: {}", path_length(&dist_matrix, &path));
+
+    println!("Path order:");
+    for &idx in &path {
+        let p = &points[idx];
+        println!("Point {}: ({}, {})", idx, p.x, p.y);
+    }
 }
