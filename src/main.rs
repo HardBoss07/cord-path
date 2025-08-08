@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 #[link(name = "cuda_kernels", kind = "static")]
@@ -18,16 +18,20 @@ struct Point {
 #[command(name = "cord-path", version, about = "Coordinate Path Planner")]
 struct Args {
     /// Path to CSV file with point coordinates
-    #[arg(short, long)]
+    #[arg(short, long, value_name = "FILE")]
     file: PathBuf,
 
     /// Optional starting X coordinate
-    #[arg(short = 'x')]
+    #[arg(short = 'x', long, value_name = "X", allow_hyphen_values = true)]
     start_x: Option<i32>,
 
     /// Optional starting Y coordinate
-    #[arg(short = 'y')]
+    #[arg(short = 'y', long, value_name = "Y", allow_hyphen_values = true)]
     start_y: Option<i32>,
+
+    /// Optional output file path (CSV)
+    #[arg(short = 'o', long, value_name = "OUTPUT_FILE")]
+    output: Option<PathBuf>,
 }
 
 fn load_points_from_csv(path: &PathBuf) -> std::io::Result<Vec<Point>> {
@@ -143,6 +147,16 @@ fn path_length(dist_matrix: &[f32], path: &[usize]) -> f32 {
     sum
 }
 
+// Write the output to a file if specified
+fn write_output(path: &PathBuf, points: &[Point], path_order: &[usize]) -> std::io::Result<()> {
+    let mut file = File::create(path)?;
+    for &idx in path_order {
+        let p = &points[idx];
+        writeln!(file, "{}, {}", p.x, p.y)?;
+    }
+    Ok(())
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -177,5 +191,9 @@ fn main() {
     for &idx in &path {
         let p = &points[idx];
         println!("Point {}: ({}, {})", idx, p.x, p.y);
+    }
+
+    if let Some(output_path) = args.output {
+        write_output(&output_path, &points, &path).expect("Failed to write output");
     }
 }
