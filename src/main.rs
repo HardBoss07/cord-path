@@ -32,6 +32,10 @@ struct Args {
     /// Optional output file path (CSV)
     #[arg(short = 'o', long, value_name = "OUTPUT_FILE")]
     output: Option<PathBuf>,
+
+    /// Suppress all console output (only works with --output)
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    quiet: bool,
 }
 
 fn load_points_from_csv(path: &PathBuf) -> std::io::Result<Vec<Point>> {
@@ -160,6 +164,12 @@ fn write_output(path: &PathBuf, points: &[Point], path_order: &[usize]) -> std::
 fn main() {
     let args = Args::parse();
 
+    // Disallow quiet without output file
+    if args.quiet && args.output.is_none() {
+        eprintln!("Error: --quiet can only be used with --output");
+        std::process::exit(1);
+    }
+
     let mut points = load_points_from_csv(&args.file).expect("Failed to load points");
     let n_original = points.len();
 
@@ -174,23 +184,30 @@ fn main() {
     }
 
     let n = points.len();
-
     let dist_matrix = call_cuda_distance_matrix(&points);
-
     let start_index = 0; // start position at index 0 if inserted
 
     let mut path = nearest_neighbor_tsp(&dist_matrix, n, start_index);
 
-    println!("Path length before 2-opt: {}", path_length(&dist_matrix, &path));
+    if !args.quiet {
+        println!(
+            "Path length before 2-opt: {}",
+            path_length(&dist_matrix, &path)
+        );
+    }
 
     two_opt(&dist_matrix, n, &mut path);
 
-    println!("Path length after 2-opt: {}", path_length(&dist_matrix, &path));
-
-    println!("Path order:");
-    for &idx in &path {
-        let p = &points[idx];
-        println!("Point {}: ({}, {})", idx, p.x, p.y);
+    if !args.quiet {
+        println!(
+            "Path length after 2-opt: {}",
+            path_length(&dist_matrix, &path)
+        );
+        println!("Path order:");
+        for &idx in &path {
+            let p = &points[idx];
+            println!("Point {}: ({}, {})", idx, p.x, p.y);
+        }
     }
 
     if let Some(output_path) = args.output {
