@@ -7,9 +7,8 @@ description = "2 dimensional coordinate based path finder"
 readme = "README.md"
 repository = "https://github.com/HardBoss07/cord-path"
 license = "AGPL-3.0-only"
-license-file = "LICENSE"
 keywords = ["path-finder"]
-categories = ["command-line-utilities", "cli", "path"]
+categories = ["command-line-utilities", "mathematics", "command-line-interfaces"]
 exclude = ["*.csv"]
 
 [dependencies]
