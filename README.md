@@ -4,8 +4,6 @@ A high-performance CLI tool for finding an optimal travel path through a set of 
 
 > **Requires:** NVIDIA driver **580.88** or later.
 
----
-
 ## 🗺️ Features
 
 * **CUDA-Accelerated Pathfinding**: Utilizes NVIDIA CUDA for extremely fast distance matrix computations.
@@ -14,8 +12,6 @@ A high-performance CLI tool for finding an optimal travel path through a set of 
 * **Customizable Start**: Optional feature to specify a custom **start position**.
 * **Batch Processing**: A **quiet mode** is available for use in scripts, suppressing all console output.
 * **CSV Output**: Easily save the final, optimized path to a **CSV** file.
-
----
 
 ## ⬇️ Installation
 
@@ -34,8 +30,6 @@ sudo mv cord-path /usr/local/bin/
 Move-Item .\cord-path.exe "C:\Program Files\cord-path\"
 # You may need to add "C:\Program Files\cord-path\" to your system's PATH
 ```
-
------
 
 ## 🚀 Usage
 
@@ -59,8 +53,6 @@ cord-path -f <file.csv> [options]
 | `-q`, `--quiet` | Suppresses all console output. **Only works when used with `--output`**. |
 | `-h`, `--help` | Displays the help message and exits. |
 | `-V`, `--version` | Displays the version number and exits. |
-
------
 
 ## 📄 Examples
 
@@ -101,8 +93,6 @@ cord-path -f points.csv -o result.csv -q
 
 This command will save the path to `result.csv` without printing any information to the console.
 
------
-
 ## 📂 CSV File Format
 
 The input file must be a plain CSV with two integer or float values per line, representing the X and Y coordinates.
@@ -114,15 +104,11 @@ The input file must be a plain CSV with two integer or float values per line, re
 ...
 ```
 
------
-
 ## ⚙️ Performance Notes
 
   * This tool's performance is dependent on the CUDA kernel used for distance calculations.
   * An **NVIDIA driver version 580.88 or newer** is mandatory.
   * For optimal performance, ensure your GPU is configured for high-performance mode.
-
------
 
 ## 🛠️ Compile from Source
 
@@ -160,12 +146,8 @@ The input file must be a plain CSV with two integer or float values per line, re
 The final executable binary will be located at:
 `target/release/cord-path`
 
------
-
 ## ⚖️ License
 
 This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**.
 
 You can read the full license text in the [LICENSE](https://www.google.com/search?q=LICENSE) file.
-
-```
